@@ -30,6 +30,7 @@ library:
     - llvm-hs
     - llvm-hs-pure
     - bytestring
+    - vector
     - aeson
 
 executables:
@@ -42,6 +43,7 @@ executables:
     - -with-rtsopts=-N
     dependencies:
     - cato
+    - bytestring
     - containers 
 tests:
   cato-test:

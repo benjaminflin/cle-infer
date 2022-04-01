@@ -1,70 +1,10 @@
-{-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE FlexibleInstances #-}
-module Check where
+module CLE.Infer.Utils where
 
-
-import Wrapper
-import Control.Monad.Trans.RWS
-import CLE
 import qualified LLVM.AST as LL
-import Control.Monad.Trans.Class (lift)
-import Data.Map (Map)
-import LLVM.AST.Global (name, parameters)
-import qualified Data.Map as M
-import Data.List (find)
-import Control.Monad (zipWithM_, foldM)
 import qualified LLVM.AST.Constant as LC
-import Debug.Trace
-
-data Name
-    = LocalName {
-        functionName :: LL.Name,
-        instructionName :: LL.Name
-    }
-    | GlobalName LL.Name
-    deriving (Eq, Ord)
-
-showLLName :: LL.Name -> String
-showLLName (LL.Name s) = "@" ++ show s
-showLLName (LL.UnName s) = "%" ++ show s
-
-instance Show Name where
-    show (LocalName f i) = showLLName f ++ "." ++ showLLName i
-    show (GlobalName g) = showLLName g
-
-data CheckErr
-    = NotFunctionAnnotation JSON
-    | LabelLookupFailure String
-    | LookupFailure Name
-    | NoCdf String
-    | NoTaints CDF
-    | Other String
-    deriving (Show)
-
-data Ty
-    = Label String
-    | UniVar Int
-    deriving (Show, Eq)
-
-data Constraint
-    = OneOf Ty [Ty]
-    | Eq Ty Ty
-    deriving (Show, Eq)
-
-type Check = RWST CLEMap [Constraint] Int (Either CheckErr)
-
-fresh :: Check Ty
-fresh = do
-    i <- get
-    put (i + 1)
-    pure $ UniVar i
-
-maybeLabel :: Maybe String -> Check Ty
-maybeLabel (Just x) = pure $ Label x
-maybeLabel Nothing = fresh
-
+import CLE.Infer.Constraint (QName (GlobalName, LocalName))
 class NamesFrom a where
     namesFrom :: a -> [LL.Name]
 
@@ -166,7 +106,7 @@ instance NamesFrom LL.Instruction where
     namesFrom LL.ICmp {LL.operand0, LL.operand1} = namesFrom [operand0, operand1]
     namesFrom LL.FCmp {LL.operand0, LL.operand1} = namesFrom [operand0, operand1]
     namesFrom LL.Phi {LL.incomingValues} = namesFrom (fst <$> incomingValues)
-    namesFrom LL.Call {LL.function, LL.arguments} = {- namesFrom function ++ -} namesFrom (fst <$> arguments)
+    namesFrom LL.Call {LL.function, LL.arguments} = namesFrom function ++ namesFrom (fst <$> arguments)
     namesFrom LL.Select {LL.condition', LL.trueValue, LL.falseValue} = namesFrom [condition', trueValue, falseValue]
     namesFrom LL.VAArg {LL.argList} = namesFrom argList
     namesFrom LL.ExtractElement {LL.vector, LL.index} = namesFrom [vector, index]
@@ -178,183 +118,21 @@ instance NamesFrom LL.Instruction where
     namesFrom LL.CleanupPad {LL.parentPad, LL.args} = namesFrom (parentPad : args)
     namesFrom _ = []
 
-filterNames :: [LL.Name] -> [LL.Name]
-filterNames = filter notIntrinsicName
-    where
-    notIntrinsicName n
-        | n == LL.mkName "llvm.dbg.declare"
-        || n == LL.mkName "printf"
-        || n == LL.mkName "llvm.var.annotation" = False
-        | otherwise = True
-
-fromLLName :: LL.Name -> LL.Name -> Name
+fromLLName :: LL.Name -> LL.Name -> QName
 fromLLName funName (LL.Name s) = GlobalName (LL.Name s)
 fromLLName funName n = LocalName funName n
 
-checkInstr ::
-    Map Name Ty
-    -> LL.Name
-    -> Maybe [String]
-    -> Instruction (LL & Raise (Maybe String))
-    -> Check (Map Name Ty)
-checkInstr ctx funName mcod (Instruction (WrapInstruction nInstr :& Raise lbl)) = do
-    let instr = extractInstr nInstr
-    labelTy <- maybeLabel lbl
-    tysMentioned <- mapM (`lookupName` ctx) (fromLLName funName <$> filterNames (namesFrom instr))
-    case mcod of
-        Just cod -> do
-            mapM_ (\ty -> tell [OneOf ty (Label <$> cod)]) tysMentioned
-            tell [OneOf labelTy (Label <$> cod)]
-        Nothing -> do
-            mapM_ (\ty -> tell [Eq labelTy ty]) tysMentioned
-    pure (ctx' nInstr labelTy)
-    where
-        extractInstr (LL.Do instr) = instr
-        extractInstr (n LL.:= instr) = instr
 
-        ctx' (n LL.:= _) labelTy = M.singleton (LocalName funName n) labelTy <> ctx
-        ctx' _ _ = ctx
+notIntrinsicName :: LL.Name -> Bool
+notIntrinsicName n
+    | n == LL.mkName "llvm.dbg.declare"
+    || n == LL.mkName "printf"
+    || n == LL.mkName "llvm.var.annotation" = False
+    | otherwise = True
 
-checkTerm ::
-    Map Name Ty
-    -> Maybe ([String], [String])
-    -> Terminator (LL & Raise (Maybe String))
-    -> Check ()
-checkTerm ctx mtaints term = pure ()
+filterNames :: [LL.Name] -> [LL.Name]
+filterNames = filter notIntrinsicName
+    
 
-checkBB ::
-    Map Name Ty
-    -> LL.Name
-    -> Maybe ([String], [String])
-    -> BasicBlock (LL & Raise (Maybe String))
-    -> Check (Map Name Ty)
-checkBB ctx funName (Just (cod, ret)) (BasicBlock _ instrs term _) = do
-    ctx' <- foldM (\ctx -> checkInstr ctx funName (Just cod)) ctx instrs
-    checkTerm ctx' (Just (cod, ret)) term
-    pure ctx'
-checkBB ctx funName Nothing (BasicBlock _ instrs term _) = do
-    ctx' <- foldM (\ctx -> checkInstr ctx funName Nothing) ctx instrs
-    checkTerm ctx' Nothing term
-    pure ctx'
-
-throw :: CheckErr -> Check a
-throw err = lift $ Left err
-
-lookupName :: Name -> Map Name Ty -> Check Ty
-lookupName name map =
-    case M.lookup name map of
-        Just ty -> pure ty
-        Nothing -> throw $ LookupFailure name
-
-
-lookupLabel :: String -> Check JSON
-lookupLabel lbl = do
-    mjson <- asks (M.lookup lbl)
-    case mjson of
-        Just json -> pure json
-        Nothing -> throw $ LabelLookupFailure lbl
-
-taintsFromSameLevel :: String -> Check Taints
-taintsFromSameLevel lbl = do
-    json <- lookupLabel lbl
-    let l = level json
-    let cdfs = cdf json
-    case find ((== l) . remotelevel) cdfs of
-        Just f ->
-            case taints f of
-                Just t -> pure t
-                Nothing -> throw $ NoTaints f
-        Nothing -> throw $ NoCdf l
-
-checkBBs ::
-    Map Name Ty
-    -> LL.Name
-    -> Maybe ([String], [String])
-    -> [BasicBlock (LL & Raise (Maybe String))]
-    -> Check (Map Name Ty)
-checkBBs ctx name mtnts = foldM (\ctx -> checkBB ctx name mtnts) ctx
-
-checkGlobal :: Map Name Ty -> Global (LL & Raise (Maybe String)) -> Check (Map Name Ty)
-checkGlobal ctx (Global (WrapGlobal LL.GlobalVariable {name} :& Raise mlbl)) =
-    (<> ctx) . M.singleton (GlobalName name) <$> maybeLabel mlbl
-checkGlobal ctx (Global (WrapGlobal LL.GlobalAlias {name} :& Raise mlbl)) =
-    (<> ctx) . M.singleton (GlobalName name) <$> maybeLabel mlbl
-
-checkGlobal ctx (Function bbs (WrapGlobal LL.Function {name} :& Raise (Just lbl))) = do
-    (Taints args cod ret) <- taintsFromSameLevel lbl
-    argTys <- mapM (const fresh) args
-    zipWithM_ genOneOf argTys args
-    let argMap = M.fromList $ zipWith toUnnamed argTys [0..]
-    ctx' <- checkBBs (argMap <> ctx) name (Just (cod, ret)) bbs
-    pure $ M.singleton (GlobalName name) (Label lbl) <> ctx'
-    where
-        genOneOf ty lbls = tell [OneOf ty (Label <$> lbls)]
-        toUnnamed ty i = (LocalName name (LL.UnName i), ty)
-checkGlobal ctx (Function bbs (WrapGlobal LL.Function {name, parameters} :& Raise Nothing)) = do
-    argTys <- mapM (const fresh) [0..length parameters]
-    let argMap = M.fromList $ zipWith toUnnamed argTys [0..]
-    ctx' <- checkBBs (argMap <> ctx) name Nothing bbs
-    (<> ctx') . M.singleton (GlobalName name) <$> fresh
-    where
-    toUnnamed ty i = (LocalName name (LL.UnName i), ty)
-checkGlobal _ _ = throw $ Other "impossible"
-
-checkAll :: [Global (LL & Raise (Maybe String))] -> Check (Map Name Ty)
-checkAll gs = go M.empty gs
-    where
-    go ctx [] = pure ctx
-    go ctx (g : gs) = do
-        ctx' <- checkGlobal ctx g
-        go ctx' gs
-
-runCheck :: Check a -> CLEMap -> Either CheckErr (a, Int, [Constraint])
-runCheck ch clemap = runRWST ch clemap 0
-
-data ConstraintErr = LabelMismatch String String deriving Show
-
-type Subst = (Ty, Ty)
-substs :: Constraint -> Either ConstraintErr [Subst]
-substs (Eq (Label x) (Label y))
-    | x == y = pure []
-    | otherwise = Left (LabelMismatch x y)
-substs (Eq (Label x) y) = pure [(Label x, y)]
-substs (Eq y (Label x)) = pure [(Label x, y)]
-substs (OneOf x [y]) = substs (Eq x y)
-substs _ = pure []
-
-class Substitutable a where
-    subst :: Subst -> a -> a
-
-instance Substitutable a => Substitutable [a] where
-    subst s = fmap (subst s)
-
-instance Substitutable a => Substitutable (Map k a) where
-    subst s = fmap (subst s)
-
-instance Substitutable Ty where
-    subst (x, y) t 
-        | y == t = x
-        | otherwise = t 
-
-instance Substitutable Constraint where
-    subst s (Eq a b) = Eq (subst s a) (subst s b)
-    subst s (OneOf x b) = OneOf (subst s x) (subst s b)
-
-substMany :: Substitutable a => [Subst] -> a -> a
-substMany ss x = foldl (flip subst) x ss
-
-solve :: [Constraint] -> Either ConstraintErr ([Constraint], [Subst])
-solve cs = do
-    ss <- concat <$> mapM substs cs
-    let cs' = substMany ss cs  
-    pure (cs', ss)
-
-solveUntilConvergence :: [Constraint] -> Either ConstraintErr ([Constraint], [Subst])
-solveUntilConvergence constrs = go constrs []
-    where
-    go constrs substs = do
-        (constrs', substs') <- solve constrs
-        if constrs' == constrs then
-            pure (constrs', substs' ++ substs)
-        else 
-            go constrs' (substs' ++ substs)
+toUnnamed :: LL.Name -> b -> Word -> (QName, b)
+toUnnamed name ty i = (LocalName name (LL.UnName i), ty)

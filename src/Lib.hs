@@ -5,8 +5,6 @@ import qualified LLVM.Internal.Context as LL
 import qualified LLVM.Internal.Module as LL
 import qualified LLVM.AST as LLP
 import qualified Data.ByteString as BS
-import Wrapper
-import Extract
 import Data.Maybe
 
 fromBitcode :: FilePath -> IO [LLP.Global]

@@ -63,7 +63,8 @@
             "ORANGE"
           ],
           "rettaints": [
-            "TAG_RESPONSE_GET_A"
+            "TAG_RESPONSE_GET_A",
+            "PURPLE"
           ]
         },
         {
@@ -77,7 +78,8 @@
             "ORANGE"
           ],
           "rettaints": [
-            "TAG_RESPONSE_GET_A"
+            "TAG_RESPONSE_GET_A",
+            "PURPLE"
           ]
         }
       ]
