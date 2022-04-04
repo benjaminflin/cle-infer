@@ -81,16 +81,8 @@ substs map _ = pure []
 class Substitutable a where
     subst :: Subst -> a -> a
 
-instance Substitutable a => Substitutable [a] where
+instance (Functor f, Substitutable a) => Substitutable (f a) where
     subst s = fmap (subst s)
-
-instance Substitutable a => Substitutable (M.Map k a) where
-    subst s = fmap (subst s)
-
-instance Substitutable NamedTy where
-    subst (x, y) t 
-        | y == t = x
-        | otherwise = t 
 
 instance Substitutable Ty where
     subst ((_, x), (_, y)) t
