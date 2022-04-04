@@ -9,7 +9,6 @@ import qualified LLVM.AST as LL
 import Data.ByteString.Char8 (unpack)
 import Data.ByteString.Short (fromShort)
 import qualified Data.Map as M
-import Debug.Trace (traceShow)
 
 data QName
     = LocalName {
@@ -73,7 +72,7 @@ substs map (RetOf t b@(n, Labelled l)) = do
     case def of 
         NodeDefinition {} -> substs map $ Eq t b
         FunDefinition {rettaints} -> 
-            traceShow (t, b, rettaints) $ substs map $ OneOf t ((n,) . Labelled <$> rettaints)
+            substs map $ OneOf t ((n,) . Labelled <$> rettaints)
 substs map (RetOf a@(n, Labelled l) b@(m, UniVar _)) = do
     substs map $ Eq a b
 substs map _ = pure []
