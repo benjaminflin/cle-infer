@@ -16,17 +16,27 @@ import qualified Data.Map as M
 import qualified Data.Map.Utils as M
 import LLVM.AST (function, Instruction (arguments))
 import CLE.JSON.Model
+import Debug.Trace
 
+annotate :: [LL.Definition] -> [TopLevelEntity (LL & Raise (Maybe Label))]
+annotate defs = mapMaybe annotateOne defs ++ annotateGlobals globals
+    where
+        globals = mapMaybe toGlobal defs
+        toGlobal (LL.GlobalDefinition global) = Just global 
+        toGlobal _ = Nothing
 
-annotate :: [LL.Global] -> [TopLevelEntity (LL & Raise (Maybe Label))]
-annotate globals = fmap toWrappedGlobal globals
+        annotateOne (LL.TypeDefinition name ty) = Just $ Decl name ty
+        annotateOne _ = Nothing
+
+annotateGlobals :: [LL.Global] -> [TopLevelEntity (LL & Raise (Maybe Label))]
+annotateGlobals globals = fmap toWrappedGlobal globals 
     where
         toWrappedGlobal LL.Function {name, basicBlocks, parameters, returnType} =
-            Left $ Function (toWrappedBasicBlock <$> basicBlocks) (mkPair (WrapFunction $ FunctionInfo name basicBlocks parameters returnType) name)
+            FunDef $ Function (toWrappedBasicBlock <$> basicBlocks) (mkPair (WrapFunction $ FunctionInfo name basicBlocks parameters returnType) name)
         toWrappedGlobal LL.GlobalVariable {name, type', initializer} =
-            Right $ GlobalVariable (mkPair (WrapGlobalVariable $ GlobalInfo name type' initializer) name)
+            GlobDef $ GlobalVariable (mkPair (WrapGlobalVariable $ GlobalInfo name type' initializer) name)
         toWrappedGlobal LL.GlobalAlias {name, type'} =
-            Right $ GlobalVariable (mkPair (WrapGlobalVariable $ GlobalInfo name type' Nothing) name)
+            GlobDef $ GlobalVariable (mkPair (WrapGlobalVariable $ GlobalInfo name type' Nothing) name)
 
         mkPair :: forall f (i :: LLIndex). f i -> LL.Name -> (f & Raise (Maybe Label)) i
         mkPair x n = x :& Raise (Label <$> (M.lookup n =<< globalAnnots))
@@ -103,5 +113,5 @@ extractName LL.GlobalAlias {name} = name
 extractName LL.Function {name} = name
 
 llvmGlobalAnnotations :: [LL.Global] -> Maybe LL.Global
-llvmGlobalAnnotations = find ((== LL.mkName "llvm.global.annotations") . extractName)
+llvmGlobalAnnotations x = traceShow (extractName <$> x) $ find ((== LL.mkName "llvm.global.annotations") . extractName) x
 

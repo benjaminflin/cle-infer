@@ -22,7 +22,16 @@ data BasicBlock f = BasicBlock LL.Name [Instruction f] (Terminator f) (f 'BB)
 data Function f = Function [BasicBlock f] (f 'Func)
 newtype GlobalVariable f = GlobalVariable (f 'Glob)
 
-type TopLevelEntity f = Either (Function f) (GlobalVariable f)
+data TopLevelEntity f 
+  = FunDef (Function f) 
+  | GlobDef (GlobalVariable f)
+  | Decl LL.Name (Maybe LL.Type)
+
+instance (forall (i :: LLIndex). Show (f i)) => Show (TopLevelEntity f) where
+  show (FunDef f) = show f
+  show (GlobDef f) = show f
+  show (Decl n t) = show n ++ " " ++ show t 
+
 
 instance Show (f 'Term) => Show (Terminator f) where
   show (Terminator f) = unwords ["(Terminator", show f, ")"]
@@ -100,5 +109,6 @@ instance (Show (f i), Show (g i)) => Show ((f & g) i) where
 newtype Raise a (i :: LLIndex) = Raise a deriving Show
 
 nameOf :: TopLevelEntity (LL & f) -> LL.Name
-nameOf (Left (Function _ (WrapFunction FunctionInfo {name} :& _))) = name
-nameOf (Right (GlobalVariable (WrapGlobalVariable (GlobalInfo name _ _) :& _))) = name
+nameOf (FunDef (Function _ (WrapFunction FunctionInfo {name} :& _))) = name
+nameOf (GlobDef (GlobalVariable (WrapGlobalVariable (GlobalInfo name _ _) :& _))) = name
+nameOf (Decl name _) = name

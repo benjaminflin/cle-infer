@@ -9,6 +9,8 @@ import qualified LLVM.AST as LL
 import Data.ByteString.Char8 (unpack)
 import Data.ByteString.Short (fromShort)
 import qualified Data.Map as M
+import Data.Maybe (mapMaybe)
+import Debug.Trace 
 
 data QName
     = LocalName {
@@ -56,10 +58,11 @@ lookupLabel (CLEMap m) lbl =
 substs :: CLEMap -> Constraint -> Either ConstraintErr [Subst]
 substs map (Eq (n, Labelled x) (m, Labelled y))
     | x == y = pure []
-    | otherwise = Left $ LabelMismatch (n, x) (n, y)
+    | otherwise = Left $ LabelMismatch (n, x) (m, y)
 substs map (Eq a@(_, Labelled _) b) = pure [(a, b)]
 substs map (Eq b a@(_, Labelled _)) = pure [(a, b)]
 substs map (OneOf x [y]) = substs map (Eq x y)
+substs map (OneOf x@(_, UniVar _) (y : _)) = substs map (Eq x y)
 substs map (ArgOf (a@(n, Labelled l), i) b@(m, UniVar _)) = do
     substs map $ Eq a b
 substs map (ArgOf (t, i) b@(n, Labelled l)) = do

@@ -36,8 +36,8 @@ checkInstr fnName mcod ctx
                     calleeTy <- lookupName (GlobalName calleeName) ctx
                     argTys <- mapM (mapM (`lookupName` ctx)) argNames
                     let zipped = concat $ zipWith (\(qname, tys) i -> (,i) <$> zip qname tys) (zip argNames argTys) [0..]
-                    mapM_ (\x -> emitConstraint $ ArgOf x (GlobalName calleeName, calleeTy)) zipped 
-                    emitConstraint $ RetOf (qName, labelTy) (GlobalName calleeName, calleeTy) 
+                    mapM_ (\x -> emitConstraint $ ArgOf x (GlobalName calleeName, calleeTy)) zipped
+                    emitConstraint $ RetOf (qName, labelTy) (GlobalName calleeName, calleeTy)
                 else
                     pure ()
             _ -> emitConstraints labelTy tysMentioned
@@ -113,7 +113,7 @@ checkTopLevelEntity ::
     -> TopLevelEntity (LL & Raise (Maybe Label))
     -> Check (Map QName Ty)
 checkTopLevelEntity ctx
-    (Left (Function bbs (WrapFunction FunctionInfo {name} :& Raise (Just lbl)))) = do
+    (FunDef (Function bbs (WrapFunction FunctionInfo {name} :& Raise (Just lbl)))) = do
         (level, args, cod, ret, cdf) <- unwrapFunDef =<< lookupLabel lbl
         argTys <- mapM (const fresh) args
         let argMap = M.fromList $ zipWith (toUnnamed name) argTys [0..]
@@ -127,7 +127,7 @@ checkTopLevelEntity ctx
         emitArgConstraint argTy (arg, idx) =
             emitConstraint $ OneOf (LocalName name (LL.UnName idx), argTy) $ (GlobalName name,) . Labelled <$> arg
 checkTopLevelEntity ctx
-    (Left (Function bbs (WrapFunction FunctionInfo {name, parameters = (args, _)} :& Raise Nothing))) = do
+    (FunDef (Function bbs (WrapFunction FunctionInfo {name, parameters = (args, _)} :& Raise Nothing))) = do
         argTys <- mapM (const fresh) args
         emitArgConstraints (zip argTys [0..])
         let argMap = M.fromList $ zipWith (toUnnamed name) argTys [0..]
@@ -145,14 +145,22 @@ checkTopLevelEntity ctx
 
             mkNamedTy (argTy, idx) = (LocalName name (LL.UnName idx), argTy)
 
-            hasGlobalName (GlobalName n) = n == name 
+            hasGlobalName (GlobalName n) = n == name
             hasGlobalName (LocalName n m) = n == name
 checkTopLevelEntity ctx
-    (Right (GlobalVariable (WrapGlobalVariable (GlobalInfo name _ _) :& Raise mlbl))) =
+    (GlobDef (GlobalVariable (WrapGlobalVariable (GlobalInfo name _ _) :& Raise mlbl))) =
         (<> ctx) . M.singleton (GlobalName name) <$> toType mlbl
+checkTopLevelEntity ctx (Decl name ty) = (<> ctx) . M.singleton (GlobalName name) <$> fresh
+
+freshTys :: [TopLevelEntity (LL & Raise (Maybe Label))] -> Check (Map QName Ty)
+freshTys = foldM (\b -> fmap (<> b) . freshTy) M.empty
+    where
+    freshTy x = M.singleton (GlobalName (nameOf x)) <$> fresh
 
 checkAllTopLevelEntities :: [TopLevelEntity (LL & Raise (Maybe Label))] -> Check (Map QName Ty)
-checkAllTopLevelEntities = foldM checkTopLevelEntity M.empty
+checkAllTopLevelEntities xs = do
+    ctx <- freshTys xs
+    foldM checkTopLevelEntity ctx xs 
 
 runCheck :: Check a -> CLEMap -> Either CheckErr (a, Int, [Constraint])
 runCheck ch clemap = runRWST ch clemap 0
