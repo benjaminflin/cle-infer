@@ -1,32 +1,5 @@
 [
   {
-    "cle-label": "TAG_RESPONSE_GET_A",
-    "cle-json": {
-      "level": "orange",
-      "cdf": [
-        {
-          "remotelevel": "purple",
-          "direction": "egress",
-          "guardhint": {
-            "operation": "allow",
-            "gapstag": [
-              2,
-              2,
-              4
-            ]
-          }
-        },
-        {
-          "remotelevel": "green",
-          "direction": "egress",
-          "guarddirective": {
-            "operation": "allow"
-          }
-        }
-      ]
-    }
-  },
-  {
     "cle-label": "PURPLE",
     "cle-json": {
       "level": "purple"
@@ -48,6 +21,27 @@
     }
   },
   {
+    "cle-label": "EWMA_MAIN",
+    "cle-json": {
+      "level":"purple",
+      "cdf": [
+        {"remotelevel":"purple", 
+         "direction": "bidirectional", 
+         "guarddirective": { "operation": "allow"}, 
+         "argtaints": [], 
+         "codtaints": ["PURPLE", "TAG_RESPONSE_GET_A", "TAG_REQUEST_GET_A"], 
+         "rettaints": ["PURPLE", "TAG_RESPONSE_GET_A", "TAG_REQUEST_GET_A"] 
+        }, 
+        {"remotelevel":"orange", 
+         "direction": "bidirectional", 
+         "guarddirective": { "operation": "allow"}, 
+         "argtaints": [], 
+         "codtaints": ["PURPLE", "TAG_RESPONSE_GET_A", "TAG_REQUEST_GET_A"], 
+         "rettaints": ["PURPLE", "TAG_RESPONSE_GET_A", "TAG_REQUEST_GET_A"] 
+        } 
+      ] }    
+  },
+  {
     "cle-label": "XDLINKAGE_GET_A",
     "cle-json": {
       "level": "orange",
@@ -63,8 +57,7 @@
             "ORANGE"
           ],
           "rettaints": [
-            "TAG_RESPONSE_GET_A",
-            "PURPLE"
+            "TAG_RESPONSE_GET_A"
           ]
         },
         {
@@ -78,8 +71,7 @@
             "ORANGE"
           ],
           "rettaints": [
-            "TAG_RESPONSE_GET_A",
-            "PURPLE"
+            "TAG_RESPONSE_GET_A"
           ]
         }
       ]

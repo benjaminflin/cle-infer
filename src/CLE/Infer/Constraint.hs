@@ -10,7 +10,7 @@ import Data.ByteString.Char8 (unpack)
 import Data.ByteString.Short (fromShort)
 import qualified Data.Map as M
 import Data.Maybe (mapMaybe)
-import Debug.Trace 
+import Debug.Trace (traceShowM)
 
 data QName
     = LocalName {
@@ -62,15 +62,15 @@ substs map (Eq (n, Labelled x) (m, Labelled y))
 substs map (Eq a@(_, Labelled _) b) = pure [(a, b)]
 substs map (Eq b a@(_, Labelled _)) = pure [(a, b)]
 substs map (OneOf x [y]) = substs map (Eq x y)
-substs map (OneOf x@(_, UniVar _) (y : _)) = substs map (Eq x y)
+-- substs map (OneOf x@(_, UniVar _) (y : _)) = substs map (Eq x y)
 substs map (ArgOf (a@(n, Labelled l), i) b@(m, UniVar _)) = do
     substs map $ Eq a b
-substs map (ArgOf (t, i) b@(n, Labelled l)) = do
+substs map (ArgOf (t@(_, UniVar _), i) b@(n, Labelled l)) = do
     def <- lookupLabel map l 
     case def of 
         NodeDefinition {} -> substs map $ Eq t b
         FunDefinition {argtaints} -> substs map $ OneOf t ((n,) . Labelled <$> argtaints !! i)
-substs map (RetOf t b@(n, Labelled l)) = do
+substs map (RetOf t@(_, UniVar _) b@(n, Labelled l)) = do
     def <- lookupLabel map l 
     case def of 
         NodeDefinition {} -> substs map $ Eq t b
@@ -117,3 +117,20 @@ solveUntilConvergence map constrs = go constrs []
             pure (constrs', substs ++ substs')
         else 
             go constrs' (substs ++ substs')
+
+inSubsts :: NamedTy -> [Subst] -> Bool  
+inSubsts n = any compareNamedTy
+    where
+        compareNamedTy (a, b) = n == a || n == b
+
+applyArbitraryOneOf :: [Subst] -> Constraint -> Constraint
+applyArbitraryOneOf substs c@(OneOf x@(n, UniVar _) (y : ys)) = 
+    if x `inSubsts` substs then c else Eq x y
+applyArbitraryOneOf _ x = x 
+
+solveUntilAssignment :: CLEMap -> [Constraint] -> Either ConstraintErr ([Constraint], [Subst])
+solveUntilAssignment map constrs = do
+    (constrs, substs) <- solveUntilConvergence map constrs 
+    let constrs' = fmap (applyArbitraryOneOf substs) constrs
+    (constrs, substs') <- solveUntilConvergence map constrs' -- 
+    pure (constrs, substs ++ substs')

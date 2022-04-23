@@ -15,7 +15,6 @@ import qualified LLVM.AST as LL
 import qualified Data.Map as M
 import CLE.Infer.Utils
 import Control.Monad.Trans.RWS
-import Debug.Trace
 
 
 checkInstr ::
@@ -30,17 +29,20 @@ checkInstr fnName mcod ctx
         tysMentioned <- mapM (`lookupName` ctx) (fromLLName fnName <$> filterNames (namesFrom instr))
         case instr of
             LL.Call {LL.function, LL.arguments} -> do
-                let calleeName = head $ namesFrom function
-                if notIntrinsicName calleeName then do
-                    let argNames = fmap (fromLLName fnName) . namesFrom . fst <$> arguments
-                    calleeTy <- lookupName (GlobalName calleeName) ctx
-                    argTys <- mapM (mapM (`lookupName` ctx)) argNames
-                    let zipped = concat $ zipWith (\(qname, tys) i -> (,i) <$> zip qname tys) (zip argNames argTys) [0..]
-                    mapM_ (\x -> emitConstraint $ ArgOf x (GlobalName calleeName, calleeTy)) zipped
-                    emitConstraint $ RetOf (qName, labelTy) (GlobalName calleeName, calleeTy)
-                else
-                    pure ()
-            _ -> emitConstraints labelTy tysMentioned
+                case namesFrom function of   
+                    [] -> pure () 
+                    (calleeName : _) -> do 
+                        if notIntrinsicName calleeName && not (localName calleeName) then do
+                                let argNames = fmap (fromLLName fnName) . namesFrom . fst <$> arguments
+                                calleeTy <- lookupName (GlobalName calleeName) ctx
+                                argTys <- mapM (mapM (`lookupName` ctx)) argNames
+                                let zipped = concat $ zipWith (\(qname, tys) i -> (,i) <$> zip qname tys) (zip argNames argTys) [0..]
+                                mapM_ (\x -> emitConstraint $ ArgOf x (GlobalName calleeName, calleeTy)) zipped
+                                emitConstraint $ RetOf (qName, labelTy) (GlobalName calleeName, calleeTy)
+                        else
+                            pure ()
+            _ -> pure () 
+        emitConstraints labelTy tysMentioned
         pure $ mkCtx labelTy
         where
             mkCtx labelTy =
@@ -64,7 +66,8 @@ checkInstr fnName mcod ctx
                         OneOf (qName, l) codNamedTys) (labelTy : tysMentioned)
                 Nothing -> zipWithM_ (\x y ->
                     emitConstraint $ Eq (qName, x) (qName, y)) (labelTy : tysMentioned) tysMentioned
-
+            localName (LL.UnName _) = True 
+            localName _ = False 
 
 checkTerm ::
     LL.Name
@@ -102,7 +105,7 @@ checkBasicBlock ::
     -> Check (Map QName Ty)
 checkBasicBlock fnName (Just (cod, ret)) ctx (BasicBlock _ instrs term _) = do
     ctx' <- foldM (checkInstr fnName (Just cod)) ctx instrs
-    checkTerm fnName Nothing ctx' term
+    checkTerm fnName (Just cod) ctx' term
 checkBasicBlock fnName Nothing ctx (BasicBlock _ instrs term _) = do
     ctx' <- foldM (checkInstr fnName Nothing) ctx instrs
     checkTerm fnName Nothing ctx' term

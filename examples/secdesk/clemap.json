@@ -1,0 +1,197 @@
+[
+  {
+    "cle-label": "ORANGE",
+    "cle-json": {
+      "level": "orange"
+    }
+  },
+  {
+    "cle-label": "EMBEDDING_SHAREABLE",
+    "cle-json": {
+      "level": "orange",
+      "cdf": [
+        {
+          "remotelevel": "purple",
+          "direction": "egress",
+          "guarddirective": {
+            "operation": "allow"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "cle-label": "PURPLE",
+    "cle-json": {
+      "level": "purple"
+    }
+  },
+  {
+    "cle-label": "XDLINKAGE_RECOGNIZE",
+    "cle-json": {
+      "level": "purple",
+      "cdf": [
+        {
+          "remotelevel": "orange",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_RECOGNIZE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_RECOGNIZE"
+          ]
+        },
+        {
+          "remotelevel": "purple",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_RECOGNIZE",
+              "ORANGE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_RECOGNIZE",
+            "ORANGE"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "cle-label": "XDLINKAGE_START_RECOGNIZER",
+    "cle-json": {
+      "level": "purple",
+      "cdf": [
+        {
+          "remotelevel": "orange",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_START_RECOGNIZER",
+              "ORANGE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_START_RECOGNIZER",
+            "ORANGE"
+          ]
+        },
+        {
+          "remotelevel": "purple",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_START_RECOGNIZER",
+              "ORANGE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_START_RECOGNIZER",
+            "ORANGE"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "cle-label": "XDLINKAGE_STOP_RECOGNIZER",
+    "cle-json": {
+      "level": "purple",
+      "cdf": [
+        {
+          "remotelevel": "orange",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_STOP_RECOGNIZER",
+              "ORANGE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_STOP_RECOGNIZER",
+            "ORANGE"
+          ]
+        },
+        {
+          "remotelevel": "purple",
+          "direction": "bidirectional",
+          "guarddirective": {
+            "operation": "allow"
+          },
+          "argtaints": [
+            [
+              "TAG_REQUEST_STOP_RECOGNIZER",
+              "ORANGE"
+            ]
+          ],
+          "codtaints": [
+            "PURPLE"
+          ],
+          "rettaints": [
+            "TAG_RESPONSE_STOP_RECOGNIZER",
+            "ORANGE"
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "cle-label": "PROCESS_SECINPUT", 
+    "cle-json": {"level":"orange",
+      "cdf": [
+        {"remotelevel":"orange", 
+         "direction": "egress", 
+         "guarddirective": { "operation": "allow" },
+         "argtaints": [["ORANGE"], ["ORANGE"]], 
+         "codtaints": ["EMBEDDING_SHAREABLE", "ORANGE"],
+         "rettaints": ["ORANGE"]}
+      ] }
+  },
+  {
+    "cle-label": "GET_FEATURES",
+    "cle-json": {"level":"orange",
+    "cdf": [
+      {"remotelevel":"orange", 
+       "direction": "bidirectional", 
+       "guarddirective": {"operation": "allow"}, 
+       "argtaints": [["ORANGE"], ["EMBEDDING_SHAREABLE"]], 
+       "codtaints": ["ORANGE", "EMBEDDING_SHAREABLE"], 
+       "rettaints": ["ORANGE", "EMBEDDING_SHAREABLE"] 
+      } 
+    ] }
+  }
+
+]
