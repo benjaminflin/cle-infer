@@ -123,14 +123,25 @@ inSubsts n = any compareNamedTy
     where
         compareNamedTy (a, b) = n == a || n == b
 
-applyArbitraryOneOf :: [Subst] -> Constraint -> Constraint
-applyArbitraryOneOf substs c@(OneOf x@(n, UniVar _) (y : ys)) = 
-    if x `inSubsts` substs then c else Eq x y
-applyArbitraryOneOf _ x = x 
+applyArbitrary :: CLEMap -> [Subst] -> Constraint -> Either ConstraintErr Constraint
+applyArbitrary map substs c@(OneOf x@(n, UniVar _) (y : ys)) = 
+    pure $ if x `inSubsts` substs then c else Eq x y
+applyArbitrary map substs (RetOf t@(_, UniVar _) b@(n, Labelled l)) = do
+    def <- lookupLabel map l 
+    case def of 
+        NodeDefinition {} -> applyArbitrary map substs $ Eq t b
+        FunDefinition {rettaints} -> 
+            applyArbitrary map substs $ OneOf t ((n,) . Labelled <$> rettaints)
+applyArbitrary map substs (ArgOf (t@(_, UniVar _), i) b@(n, Labelled l)) = do
+    def <- lookupLabel map l 
+    case def of 
+        NodeDefinition {} -> applyArbitrary map substs $ Eq t b
+        FunDefinition {argtaints} -> applyArbitrary map substs $ OneOf t ((n,) . Labelled <$> argtaints !! i)
+applyArbitrary _ _ x = pure x 
 
 solveUntilAssignment :: CLEMap -> [Constraint] -> Either ConstraintErr ([Constraint], [Subst])
 solveUntilAssignment map constrs = do
     (constrs, substs) <- solveUntilConvergence map constrs 
-    let constrs' = fmap (applyArbitraryOneOf substs) constrs
+    constrs' <- mapM (applyArbitrary map substs) constrs
     (constrs, substs') <- solveUntilConvergence map constrs' -- 
     pure (constrs, substs ++ substs')

@@ -41,7 +41,8 @@ checkInstr fnName mcod ctx
                                 emitConstraint $ RetOf (qName, labelTy) (GlobalName calleeName, calleeTy)
                         else
                             pure ()
-            _ -> pure () 
+            _ -> zipWithM_ (\x y ->
+                    emitConstraint $ Eq (qName, x) (qName, y)) (labelTy : tysMentioned) tysMentioned
         emitConstraints labelTy tysMentioned
         pure $ mkCtx labelTy
         where
@@ -64,8 +65,7 @@ checkInstr fnName mcod ctx
                     let codNamedTys = (GlobalName fnName,) . Labelled <$> lbls
                     mapM_ (\l -> emitConstraint $
                         OneOf (qName, l) codNamedTys) (labelTy : tysMentioned)
-                Nothing -> zipWithM_ (\x y ->
-                    emitConstraint $ Eq (qName, x) (qName, y)) (labelTy : tysMentioned) tysMentioned
+                Nothing -> pure () 
             localName (LL.UnName _) = True 
             localName _ = False 
 
