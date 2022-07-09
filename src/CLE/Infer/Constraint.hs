@@ -17,7 +17,10 @@ data QName
         functionName :: LL.Name,
         instructionName :: LL.Name
     }
-    | GlobalName LL.Name
+    | GlobalName {
+        globalName :: LL.Name,
+        isFunc :: Bool
+    }
     deriving (Eq, Ord)
 
 showLLName :: LL.Name -> String
@@ -28,7 +31,7 @@ type NamedTy = (QName, Ty)
 
 instance Show QName where
     show (LocalName f i) = showLLName f ++ "." ++ showLLName i
-    show (GlobalName g) = showLLName g
+    show (GlobalName g _) = showLLName g
 
 data Ty
     = Labelled Label
@@ -46,6 +49,7 @@ type Subst = (NamedTy, NamedTy)
 type NamedLabel = (QName, Label)
 data ConstraintErr 
     = LabelMismatch NamedLabel NamedLabel 
+    | NotOneOf NamedTy [NamedTy] 
     | LookupError Label 
     deriving Show
 
@@ -62,6 +66,9 @@ substs map (Eq (n, Labelled x) (m, Labelled y))
 substs map (Eq a@(_, Labelled _) b) = pure [(a, b)]
 substs map (Eq b a@(_, Labelled _)) = pure [(a, b)]
 substs map (OneOf x [y]) = substs map (Eq x y)
+substs map (OneOf x@(_, l@(Labelled _)) (y : ys)) = do
+    if l `elem` fmap snd (y : ys) then pure [] else 
+        Left $ NotOneOf x (y : ys)  
 -- substs map (OneOf x@(_, UniVar _) (y : _)) = substs map (Eq x y)
 substs map (ArgOf (a@(n, Labelled l), i) b@(m, UniVar _)) = do
     substs map $ Eq a b

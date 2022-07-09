@@ -7,6 +7,7 @@ import CLE.Infer.Constraint
 import qualified Data.Map as M
 import Data.Coerce (coerce)
 import Control.Monad.Trans.Class (lift)
+import Control.Applicative
 
 
 data CheckErr
@@ -47,6 +48,10 @@ emitConstraint :: Constraint -> Check ()
 emitConstraint x = tell [x] 
 
 lookupName :: QName -> M.Map QName Ty -> Check Ty
+lookupName name@(GlobalName g _) map =
+    case M.lookup (GlobalName g True) map <|> M.lookup (GlobalName g False) map of
+        Just ty -> pure ty
+        Nothing -> throw $ LookupFailure name
 lookupName name map =
     case M.lookup name map of
         Just ty -> pure ty

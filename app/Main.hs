@@ -9,6 +9,9 @@ import CLE.LLVM.Annotater (annotate)
 import CLE.Infer.Check (runCheck, checkAllTopLevelEntities)
 import CLE.Infer.Constraint (solveUntilAssignment, solve, substMany)
 import qualified Data.ByteString.Lazy as B
+import qualified Data.ByteString.Lazy.Char8 as C 
+import CLE.JSON.Topology (fromTypeMap)
+import Data.Aeson.Encode.Pretty
 main :: IO ()
 main = do
     [bc, clemap] <- getArgs
@@ -24,5 +27,6 @@ main = do
                         Left x -> print x
                         Right (constrs', substs) -> do
                             mapM_ print constrs  
-                            print "generated map:"
-                            mapM_ (\(n, l) -> putStrLn $ show n ++ " -> " ++ show l) $ M.toList $ substMany substs map  
+                            putStrLn "generated map:"
+                            let gmap = substMany substs map  
+                            C.putStrLn $ encodePretty (fromTypeMap clemap gmap) 

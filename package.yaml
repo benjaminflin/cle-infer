@@ -45,6 +45,8 @@ executables:
     - cle-infer
     - bytestring
     - containers 
+    - aeson
+    - aeson-pretty
 tests:
   cle-infer-test:
     main:                Spec.hs

@@ -119,7 +119,7 @@ instance NamesFrom LL.Instruction where
     namesFrom _ = []
 
 fromLLName :: LL.Name -> LL.Name -> QName
-fromLLName funName (LL.Name s) = GlobalName (LL.Name s)
+fromLLName funName (LL.Name s) = GlobalName (LL.Name s) True
 fromLLName funName n = LocalName funName n
 
 

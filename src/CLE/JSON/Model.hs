@@ -108,3 +108,10 @@ toRawCLEJSON (FunDefinition level args cod ret cdfs) = R.CLEJSON (coerce level) 
 
 toRawCLEMap :: CLEMap -> R.CLEMap 
 toRawCLEMap (CLEMap map) = R.CLEMap $ toRawCLEJSON <$> M.mapKeys coerce map
+
+levelOf :: Definition -> Level 
+levelOf (NodeDefinition le cdfs) = le
+levelOf (FunDefinition le lass las las' cdfs) = le
+
+lookupLabel :: Label -> CLEMap -> Maybe Definition 
+lookupLabel l (CLEMap m) = M.lookup l m 
